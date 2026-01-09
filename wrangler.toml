@@ -1,0 +1,11 @@
+name = "mota-scout"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# 定时任务：每小时执行一次，检查更新
+[triggers]
+crons = ["0 * * * *"]
+
+[vars]
+SUPABASE_URL = "你的Supabase项目URL"
+# 注意：API Key 应该作为 Secret 存储，不要直接写在这里

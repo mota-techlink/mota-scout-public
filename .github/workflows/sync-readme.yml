@@ -1,0 +1,56 @@
+name: Sync README to Blog
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'README.md' # 仅在 README 修改时触发
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  sync-to-blog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v3
+
+      - name: Process Markdown and Add Front-matter
+        run: |
+          # 1. 设置博客文件名（建议使用项目名）
+          FILENAME="mota-scout-sentinel.md"
+          
+          # 2. 注入符合 Hugoplate 格式的 Front-matter
+          echo "---" > $FILENAME
+          echo "title: \"Project Scout: The Inverted Atom's Sentinel\"" >> $FILENAME
+          echo "date: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $FILENAME
+          echo "description: \"Structuring the Chaos: How MOTA TECHLINK's open-source scout monitors high-value edge data.\"" >> $FILENAME
+          echo "categories: [\"Open Source\", \"Infrastructure\"]" >> $FILENAME
+          echo "tags: [\"Cloudflare Workers\", \"Data Pipeline\", \"Automation\"]" >> $FILENAME          
+          
+          # 封面图（建议在 scout 仓库下也放一个 cover.jpg，路径按需修改）
+          echo "image: \"https://raw.githubusercontent.com/mota-techlink/mota-scout-public/main/assets/images/cover.jpg\"" >> $FILENAME
+          echo "canonicalUrl: \"https://github.com/mota-techlink/mota-scout-public\"" >> $FILENAME
+          echo "keywords: [\"MOTA TECHLINK\", \"Scout\", \"Edge Computing\", \"Structuring the Chaos\"]" >> $FILENAME
+          echo "author: \"MOTA TECHLINK\"" >> $FILENAME
+          echo "---" >> $FILENAME
+          echo "" >> $FILENAME
+          
+          # 3. 追加 README 内容并处理（可选：转换相对路径图片为绝对路径）
+          cat README.md >> $FILENAME
+          
+          # 4. 准备同步目录
+          mkdir -p sync_dir
+          mv $FILENAME sync_dir/
+
+      - name: Push to Website Repo
+        uses: cpina/github-action-push-to-another-repository@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.SYNC_TO_BLOG_TOKEN }}
+        with:
+          source-directory: 'sync_dir'
+          destination-github-username: 'mota-techlink'
+          destination-repository-name: 'motaiot-site'
+          user-email: 'contact@motaiot.com'
+          target-branch: main
+          # 针对 Hugoplate 的目录结构，同步到博客文章目录
+          target-directory: 'content/english/blog'
