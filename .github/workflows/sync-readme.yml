@@ -72,6 +72,13 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "docs: sync scout readme [skip ci]"
+            # 获取当前时间戳
+            TIMESTAMP=$(date +'%Y-%m-%d %H:%M:%S')
+            
+            # 关键修改：
+            # 1. 移除了 [skip ci]，这样 Cloudflare 才会触发构建
+            # 2. 增加了 $TIMESTAMP 变量
+            git commit -m "docs: sync scout readme update at $TIMESTAMP"
+            
             git push origin $TARGET_BRANCH
-          fi          
+          fi   
