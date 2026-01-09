@@ -22,10 +22,18 @@ jobs:
           echo "---" > $FILENAME
           echo "title: \"Project Scout: The Inverted Atom's Sentinel\"" >> $FILENAME
           echo "date: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $FILENAME
-          # ... (这里保持你之前的 Front-matter 配置不变) ...
+          echo "description: \"Structuring the Chaos: How MOTA TECHLINK's open-source scout monitors high-value edge data.\"" >> $FILENAME
+          echo "categories: [\"Open Source\", \"Infrastructure\"]" >> $FILENAME
+          echo "tags: [\"Cloudflare Workers\", \"Data Pipeline\", \"Automation\"]" >> $FILENAME          
+          
+          # 封面图（建议在 scout 仓库下也放一个 cover.jpg，路径按需修改）
+          echo "image: \"https://raw.githubusercontent.com/mota-techlink/mota-scout-public/main/assets/images/cover.jpg\"" >> $FILENAME
+          echo "canonicalUrl: \"https://github.com/mota-techlink/mota-scout-public\"" >> $FILENAME
+          echo "keywords: [\"MOTA TECHLINK\", \"Scout\", \"Edge Computing\", \"Structuring the Chaos\"]" >> $FILENAME
           echo "author: \"MOTA TECHLINK\"" >> $FILENAME
           echo "---" >> $FILENAME
           echo "" >> $FILENAME
+
           
           # 2. 追加内容
           cat README.md >> $FILENAME
