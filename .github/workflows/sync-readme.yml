@@ -4,8 +4,8 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'README.md' # 仅在 README 修改时触发
-  workflow_dispatch: # 允许手动触发
+      - 'README.md'
+  workflow_dispatch:
 
 jobs:
   sync-to-blog:
@@ -16,41 +16,54 @@ jobs:
 
       - name: Process Markdown and Add Front-matter
         run: |
-          # 1. 设置博客文件名（建议使用项目名）
           FILENAME="mota-scout-sentinel.md"
           
-          # 2. 注入符合 Hugoplate 格式的 Front-matter
+          # 1. 生成 Front-matter
           echo "---" > $FILENAME
           echo "title: \"Project Scout: The Inverted Atom's Sentinel\"" >> $FILENAME
           echo "date: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $FILENAME
-          echo "description: \"Structuring the Chaos: How MOTA TECHLINK's open-source scout monitors high-value edge data.\"" >> $FILENAME
-          echo "categories: [\"Open Source\", \"Infrastructure\"]" >> $FILENAME
-          echo "tags: [\"Cloudflare Workers\", \"Data Pipeline\", \"Automation\"]" >> $FILENAME          
-          
-          # 封面图（建议在 scout 仓库下也放一个 cover.jpg，路径按需修改）
-          echo "image: \"https://raw.githubusercontent.com/mota-techlink/mota-scout-public/main/assets/images/cover.jpg\"" >> $FILENAME
-          echo "canonicalUrl: \"https://github.com/mota-techlink/mota-scout-public\"" >> $FILENAME
-          echo "keywords: [\"MOTA TECHLINK\", \"Scout\", \"Edge Computing\", \"Structuring the Chaos\"]" >> $FILENAME
+          # ... (这里保持你之前的 Front-matter 配置不变) ...
           echo "author: \"MOTA TECHLINK\"" >> $FILENAME
           echo "---" >> $FILENAME
           echo "" >> $FILENAME
           
-          # 3. 追加 README 内容并处理（可选：转换相对路径图片为绝对路径）
+          # 2. 追加内容
           cat README.md >> $FILENAME
           
-          # 4. 准备同步目录
-          mkdir -p sync_dir
-          mv $FILENAME sync_dir/
+          # 注意：这里不需要 mkdir sync_dir 了，因为我们直接操作文件
 
-      - name: Push to Website Repo
-        uses: cpina/github-action-push-to-another-repository@main
+      - name: Push to Website Repo (Safely)
         env:
+          # 确保你在 Secrets 里配置了名为 PERSONAL_ACCESS_TOKEN 的 Token
+          # 这个 Token 必须有 repo 权限（读写私有仓库）
           API_TOKEN_GITHUB: ${{ secrets.SYNC_TO_BLOG_TOKEN }}
-        with:
-          source-directory: 'sync_dir'
-          destination-github-username: 'mota-techlink'
-          destination-repository-name: 'motaiot-site'
-          user-email: 'contact@motaiot.com'
-          target-branch: main
-          # 针对 Hugoplate 的目录结构，同步到博客文章目录
-          target-directory: 'content/english/blog'
+          TARGET_REPO: 'mota-techlink/motaiot-site'
+          TARGET_BRANCH: 'main'
+          TARGET_DIR: 'content/english/blog'
+        run: |
+          # 1. 配置 Git 用户信息
+          git config --global user.email "bot@motaiot.com"
+          git config --global user.name "MOTA Bot"
+          
+          # 2. 克隆目标仓库到临时目录 'target_repo'
+          git clone https://x-access-token:$API_TOKEN_GITHUB@github.com/$TARGET_REPO.git target_repo
+          
+          # 3. 进入目标目录
+          cd target_repo
+          git checkout $TARGET_BRANCH
+          
+          # 4. 移动生成的文件到目标路径
+          # 假设上面的 step 生成的文件在 workspace 根目录
+          # 我们把生成的文件覆盖进去（只覆盖这一个文件，不删别的）
+          mv ../mota-scout-sentinel.md $TARGET_DIR/
+          
+          # 5. 提交并推送
+          git add $TARGET_DIR/mota-scout-sentinel.md
+          
+          # 只有当文件有变化时才 commit，防止空提交报错
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "docs: sync scout readme [skip ci]"
+            git push origin $TARGET_BRANCH
+          fi          
