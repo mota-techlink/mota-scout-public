@@ -1,11 +1,20 @@
-name = "mota-scout"
+name = "mota-scout-public"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
+# 显式开启 workers.dev 子域名 (我们需要这个域名来访问 API)
+workers_dev = true
 
-# 定时任务：每小时执行一次，检查更新
+# 显式关闭预览 URL (生产环境不需要每次部署都生成临时预览链接)
+preview_urls = false
+
+# 1. 刚才获取的 Account ID (填入引号内)
+account_id = "b88aee6f3e124960f47d8b54c2ff7663"
+
+# 2. 定时任务配置 (每小时第0分钟执行，即整点执行)
 [triggers]
 crons = ["0 * * * *"]
 
+# 3. 环境变量 (非敏感信息)
+# 注意：这里只填 URL，千万不要填 KEY 和 SECRET！
 [vars]
-SUPABASE_URL = "你的Supabase项目URL"
-# 注意：API Key 应该作为 Secret 存储，不要直接写在这里
+SUPABASE_URL = "https://ivflrmuylsksagmzufpa.supabase.co"

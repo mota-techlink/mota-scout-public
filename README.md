@@ -1,85 +1,151 @@
-# Project Scout: The Inverted Atom's Sentinel
+# Project Scout: The Inverted Atom's Sentinel (V2.0)
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/mota-techlink/mota-scout-public/main/assets/images/cover.jpg" alt="MOTA Project Scout">
 </p>
 
-**Project Scout** is the high-efficiency edge data gateway of the MOTA ecosystem. Designed as a "Sentinel," it monitors high-value digital noise—starting with YouTube and RSS feeds—and compresses it into structured signals via Cloudflare Workers and Supabase.
+**Project Scout (V2.0)** is the upgraded edge data gateway of the MOTA ecosystem. Moving beyond hardcoded logic, V2.0 is fully **Database-Driven**, dynamically fetching subscription targets from Supabase and exposing a secure API for management.
 
 > **Structuring the Chaos:** This project is a living implementation of the "Inverted Atom" theory, where digital chaos is captured at the edge and funneled into high-density actionable insights.
 
-<div align="left">
-  <a href="https://zdoc.app/zh/mota-techlink/mota-scout-public">中文</a> | 
-  <a href="https://zdoc.app/es/mota-techlink/mota-scout-public">Español</a> |  
-  <a href="https://zdoc.app/de/mota-techlink/mota-scout-public">Deutsch</a> | 
-  <a href="https://zdoc.app/fr/mota-techlink/mota-scout-public">Français</a> |      
-  <a href="https://zdoc.app/pt/mota-techlink/mota-scout-public">Português</a> |   
-  <a href="https://zdoc.app/ru/mota-techlink/mota-scout-public">Русский</a> |   
-  <a href="https://zdoc.app/ko/mota-techlink/mota-scout-public">한국어</a> |   
-  <a href="https://zdoc.app/ja/mota-techlink/mota-scout-public">日本語</a> |     
-</div>
+---
 
-<br/>
+## 1. Technical Architecture (V2.0)
 
-## 1. Project Vision
+The Scout acts as a dual-mode Sentinel running on **Cloudflare Workers**:
 
-In the MOTA architecture, **Scout** represents the sensory system. While most pipelines struggle with manual data entry, Scout automates the "Discovery Phase." 
+1.  **Cron Mode (The Watcher):**
+    * Wakes up hourly (or as configured).
+    * Queries `channels` table for `is_active=true` targets.
+    * Scans YouTube RSS feeds.
+    * Upserts metadata into the `videos` table.
+2.  **API Mode (The Interface):**
+    * Exposes secure endpoints to manage subscriptions.
+    * Connects with **mota-console** (Back Office).
 
-- **Edge First:** Runs on Cloudflare Workers for 0-ms latency and global distribution.
-- **Serverless Persistence:** Integrates with Supabase to maintain a real-time state of the "Digital Frontier."
-- **Building in Public:** This module is open-source to showcase how to build a robust, cost-effective data pipeline in 2026.
+## 2. Configuration & Setup
 
-## 2. Technical Architecture
+### 2.1 Database Schema (Supabase)
 
-The pipeline follows a tri-layer structure:
-1. **The Scout (Public):** A Cloudflare Worker that polls YouTube/RSS feeds.
-2. **The Heart (Private/Public Mix):** Supabase PostgreSQL storing video metadata and processing status.
-3. **The Muscle (Private):** A local worker (via Cloudflare Tunnel) that handles heavy-duty transcription and LLM structuring.
-
-## 3. Quick Start (How to Reference)
-
-### a. Setup Supabase
-Create a table named `videos` with the following schema:
+Run the following SQL in your Supabase SQL Editor to initialize the system:
 
 ```sql
+-- 1. Subscription Management Table
+create table channels (
+  id uuid default uuid_generate_v4() primary key,
+  channel_id text not null unique, -- YouTube Channel ID
+  name text,                       -- Human readable name
+  is_active boolean default true,  -- Toggle for the Scout
+  last_scouted_at timestamp with time zone,
+  created_at timestamp with time zone default now()
+);
+
+-- 2. Asset Queue Table
 create table videos (
   id uuid default uuid_generate_v4() primary key,
   video_id text unique,
   title text,
   url text,
-  status text default 'pending', -- pending, processing, completed
+  channel_id text references channels(channel_id),
+  status text default 'pending', -- pending -> processing -> review_needed -> published
+  transcript text,
+  summary_markdown text,
   created_at timestamp with time zone default now()
 );
+
+-- Enable RLS (Optional but recommended)
+alter table channels enable row level security;
+alter table videos enable row level security;
 ```
+### 2.2 Environment Variables (Secrets)
+For security, sensitive keys must be stored in Cloudflare Secrets (production) or .dev.vars (local).
 
-### b. Deploy the Sentinel
-Install Wrangler and deploy the worker to your Cloudflare account:
+|Variable Name|Description|Location|
+| :--- | :----: | ---: |
+|SUPABASE_URL|Your Project URL (e.g., https://xyz.supabase.co)|wrangler.toml (Vars)|
+|SUPABASE_KEY|Service Role Secret (Bypasses RLS for backend writing)|Secrets / .dev.vars|
+|ADMIN_SECRET|Custom password for API protection (e.g., mota-2026)|Secrets / .dev.vars|
+|CLOUDFLARE_API_TOKEN|Cloudfalre Work template|Secrets / .dev.vars|
 
+## 3. Development & Deployment
+
+**Local Development**
+To run the worker locally with access to your real Supabase instance:
+1. Create a .dev.vars file in the root:
+```Plaintext
+  SUPABASE_KEY=your_service_role_key
+  ADMIN_SECRET=your_custom_password
+```
+2. Run the dev server:
 ```Bash
-npm install -g wrangler
-wrangler deploy
+npx wrangler dev --remote --test-scheduled
 ```
 
-### c. Configuration
-Ensure you set your environment variables in Cloudflare:
+### Production Deployment
+The project uses GitHub Actions for CI/CD. Push to main to deploy.Ensure GitHub Repository Secrets are set:
+- CLOUDFLARE_API_TOKEN
+- SUPABASE_URLSUPABASE_KEY
+- ADMIN_SECRET
+  
+  
+## 4. Testing & Usage Guide
+Since the API is protected, you cannot simply visit the URL in a browser. Use the methods below.
 
-SUPABASE_URL: Your project URL.
+### Method 1: API Management (via CLI)
+Use curl to manage your subscription list. Replace YOUR_DOMAIN and YOUR_ADMIN_SECRET.
 
-SUPABASE_KEY: Your service role key (stored as a Secret).
+Add a new Channel:
+```Bash
+curl -X POST "https://mota-scout-public.YOUR_DOMAIN.workers.dev/channels" \
+     -H "X-Admin-Key: YOUR_ADMIN_SECRET" \
+     -H "Content-Type: application/json" \
+     -d '{"name": "MKBHD", "channel_id": "UCBJycsmduvYEL83R_U4JriQ"}'
+```
 
-## 4. Why reference this project?
-Unlike generic scrapers, Project Scout is optimized for:
+List all Channels:
+```Bash
+curl -X GET "https://mota-scout-public.YOUR_DOMAIN.workers.dev/channels" \
+     -H "X-Admin-Key: YOUR_ADMIN_SECRET"
+```
 
-- **Low Cost:** Utilizing Cloudflare's free tier for scheduling.
+Toggle Active Status:
+```Bash
+curl -X PATCH "https://mota-scout-public.YOUR_DOMAIN.workers.dev/channels" \
+     -H "X-Admin-Key: YOUR_ADMIN_SECRET" \
+     -H "Content-Type: application/json" \
+     -d '{"id": "CHANNEL_UUID", "is_active": false}'
+```
 
-- **Scalability:** Easily add more channels or data sources by modifying the src/index.js.
+Local Test Driven:
+```Bash
+curl "http://localhost:8787/scheduled?cron=0+*+*+*+*"  \
+     -H "X-Admin-Key: YOUR_ADMIN_SECRET!"  \
+     -H "Content-Type: application/json"
+```
 
-- **Content Strategy:** It serves as the "First Breath" of the MOTA Content Engine, feeding data directly into the Digital Human pipeline (dh_pipeline).
+### Method 2: Verifying the Scout (Cron Trigger)
 
-## ❓ FAQ
-**Q: Can I use this for non-YouTube sources?**  A: Absolutely. The architecture is modular. You can plug in any RSS or API-based source.
+To verify if the Scout is correctly finding videos:
+1. Open Real-time Logs:Run this in your terminal:
+```Bash
+npx wrangler tail
+```
 
-**Q: Is it safe to run?** A: Yes. All sensitive keys are handled via Cloudflare Secrets and GitHub Actions.
+2. Trigger the Event:
+- Go to Cloudflare Dashboard -> Workers -> Settings -> Triggers.
+- Click "Test Cron".
+  
+3. Observe:You should see logs like [Scout] Checked MKBHD: Found Video....
+
+## 5. API Reference
+
+|Endpoint|Method|Payload|Description|
+| :--- | :---- | :--- |:--- |
+|/channels|GET|-|List all subscriptions|
+/channels|POST|{name, channel_id}|Add a new subscription|
+/channels|PATCH|{id, is_active}|Pause/Resume a subscription|
 
 
-[MOTA TECHLINK:](https://motaiot.com) **From Bits to Atoms. Inverted.**
+Authentication:All requests must include the header: X-Admin-Key: <YOUR_ADMIN_SECRET>
+
+[MOTA TECHLINK](https://motaiot.com)
