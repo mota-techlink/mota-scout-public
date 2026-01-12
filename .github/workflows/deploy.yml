@@ -3,17 +3,21 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - 'README.md' # 忽略文档更新，避免重复触发    
+      - 'README.md'
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      
+      # ✅ 新增这一步：安装依赖 (这就是去商店采购)
+      - name: Install Dependencies
+        run: npm ci
+
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # 不传 secrets，也不传 env
-          # 假设：
-          # 1. SUPABASE_URL 已经在 wrangler.toml 里写好了
-          # 2. SUPABASE_KEY 和 ADMIN_SECRET 已经在云端配置好了          
+          # 注意：这里不需要 secrets 列表了，因为我们只传代码
+          # packageManager: npm # 可选，显式指定使用 npm

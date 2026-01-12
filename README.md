@@ -67,7 +67,35 @@ For security, sensitive keys must be stored in Cloudflare Secrets (production) o
 |ADMIN_SECRET|Custom password for API protection (e.g., mota-2026)|Secrets / .dev.vars|
 |CLOUDFLARE_API_TOKEN|Cloudfalre Work template|Secrets / .dev.vars|
 
+### 2.3 Install Superbase depencies:
+```Bash
+# 1. 安装 Supabase SDK (这是解决报错的关键)
+npm install @supabase/supabase-js
+
+```
+
 ## 3. Development & Deployment
+**Wrangler Setup**
+```Bash
+# 1. 安装 Wrangler (作为开发依赖)
+npm install -D wrangler@latest
+
+# 2. 验证安装版本 (确保能正确输出版本号)
+npx wrangler --version
+
+# 3. 验证登录状态 (确保 Authentication 正确)
+npx wrangler whoami
+# 如果显示 "Not logged in"，请运行 npx wrangler login
+
+#4. 实时日志功能
+npx wrangler tail
+```
+
+**Remote KEY Setup**
+```Bash
+npx wrangler secret put SUPABASE_KEY
+npx wrangler secret put ADMIN_SECRET
+```
 
 **Local Development**
 To run the worker locally with access to your real Supabase instance:
