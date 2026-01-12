@@ -3,25 +3,17 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - 'README.md' # 忽略文档更新，避免重复触发
-
+      - 'README.md' # 忽略文档更新，避免重复触发    
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # 关键新增：显式声明要传递给 Worker 的变量
-          secrets: |
-            SUPABASE_URL
-            SUPABASE_KEY
-            ADMIN_SECRET
-        env:
-          # 将 GitHub Secrets 映射到环境变量，以便 Wrangler 读取
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+          # 不传 secrets，也不传 env
+          # 假设：
+          # 1. SUPABASE_URL 已经在 wrangler.toml 里写好了
+          # 2. SUPABASE_KEY 和 ADMIN_SECRET 已经在云端配置好了          
