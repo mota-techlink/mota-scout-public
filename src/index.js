@@ -1,5 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
+// 1. 定义允许跨域的 Header
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*', // 或者指定你的前端域名 'https://console.你的域名.com'
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Key',
+};
+
 export default {
   // --------------------------------------------------------
   // 1. 定时任务入口 (CRON TRIGGER)
@@ -97,6 +104,12 @@ export default {
   // 允许你通过 HTTP 请求直接管理 channels 表
   // --------------------------------------------------------
   async fetch(request, env) {
+
+    // 2. 处理 OPTIONS 预检请求 (浏览器在发 POST 前会先发 OPTIONS 探路)
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
+
     const url = new URL(request.url);
     const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY);
 
@@ -104,14 +117,17 @@ export default {
     if (request.headers.get('X-Admin-Key') !== env.ADMIN_SECRET) {
       return new Response('Unauthorized: Missing or Invalid X-Admin-Key', { status: 401 });
     }
-
-    // GET /channels - 列出所有订阅
+    
+    // 在所有返回 Response 的地方，都要把 headers 加上
+    // 示例：GET /channels
     if (request.method === 'GET' && url.pathname === '/channels') {
-      const { data, error } = await supabase
-        .from('channels')
-        .select('*')
-        .order('created_at', { ascending: false });
-      return new Response(JSON.stringify({ data, error }), { headers: { 'Content-Type': 'application/json' }});
+      const { data, error } = await supabase.from('channels').select('*');
+      return new Response(JSON.stringify({ data, error }), {
+        headers: { 
+          'Content-Type': 'application/json',
+          ...corsHeaders // <--- 加上这一行
+        }
+      });
     }
 
     // POST /channels - 新增订阅
@@ -127,7 +143,12 @@ export default {
             is_active: true
           })
           .select();
-        return new Response(JSON.stringify({ data, error }), { headers: { 'Content-Type': 'application/json' }});
+        return new Response(JSON.stringify({ data, error }), { 
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders // <--- 加上这一行
+           }
+          });
       } catch (e) {
         return new Response('Invalid JSON', { status: 400 });
       }
@@ -141,9 +162,15 @@ export default {
             .update({ is_active: body.is_active })
             .eq('id', body.id) // 根据 UUID 更新
             .select();
-        return new Response(JSON.stringify({ data, error }), { headers: { 'Content-Type': 'application/json' }});
+        return new Response(JSON.stringify({ data, error }), { 
+          headers: { 
+            'Content-Type': 'application/json', 
+            ...corsHeaders  
+          }
+        });
     }
 
-    return new Response('MOTA Scout V2 Active', { status: 200 });
+    
+    return new Response('Active', { status: 200, headers: corsHeaders });
   }
 };
