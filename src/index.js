@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { XMLParser } from 'fast-xml-parser'; // 🟢 1. 引入解析库
 
-// 1. 定义允许跨域的 Header
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*', 
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
@@ -41,6 +41,10 @@ export default {
   // --------------------------------------------------------
   async scoutChannel(channel, supabase) {
     const RSS_URL = `https://www.youtube.com/feeds/videos.xml?channel_id=${channel.channel_id}`;
+    const parser = new XMLParser({
+        ignoreAttributes: false, // 读取属性，我们需要 yt:videoId
+        attributeNamePrefix: "@_" // 属性前缀，防冲突
+    });
     
     try {
       const response = await fetch(RSS_URL);
@@ -51,33 +55,50 @@ export default {
       }
       
       const xml = await response.text();
+      const jsonObj = parser.parse(xml);
 
-      // 解析 XML (正则提取最新一条)
-      const entryStart = xml.indexOf('<entry>');
-      if (entryStart === -1) {
-        return { success: true, message: 'No videos found in feed', video: null };
+      // 🟢 2. 获取 Entry 列表 (兼容单个或多个的情况)
+      let entries = jsonObj.feed?.entry;
+      
+      if (!entries) {
+        return { success: true, message: 'No videos found in feed', count: 0 };
       }
-      
-      const entryXml = xml.substring(entryStart);
-      const videoId = entryXml.match(/<yt:videoId>(.*?)<\/yt:videoId>/)?.[1];
-      const title = entryXml.match(/<title>(.*?)<\/title>/)?.[1];
-      
-      if (!videoId) return { success: true, message: 'Parse error: No Video ID', video: null };
 
-      const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      // 如果只有一个视频，parser 会解析成对象而不是数组，强制转为数组
+      if (!Array.isArray(entries)) {
+        entries = [entries];
+      }
 
-      // C. 写入 videos 表
-      const { error } = await supabase.from('videos').upsert({
-        video_id: videoId,
-        title: title,
-        url: videoUrl,
-        channel_id: channel.channel_id,
-        status: 'pending',
-        created_at: new Date().toISOString()
-      }, { 
-        onConflict: 'video_id',
-        ignoreDuplicates: true 
+      // 🟢 3. 准备批量数据
+      const videosToUpsert = entries.map((entry) => {
+        const videoId = entry['yt:videoId'];
+        const title = entry.title;
+        const publishedAt = entry.published; // 获取发布时间
+        
+        return {
+            video_id: videoId,
+            title: title,
+            url: `https://www.youtube.com/watch?v=${videoId}`,
+            channel_id: channel.channel_id,
+            status: 'pending',
+            created_at: publishedAt || new Date().toISOString() // 优先使用发布时间
+        };
       });
+
+      if (videosToUpsert.length === 0) {
+          return { success: true, message: 'Parse OK but list empty', count: 0 };
+      }
+
+      // 🟢 4. 批量 Upsert (有则跳过，无则新增)
+      // onConflict: 'video_id' -> 如果 video_id 冲突
+      // ignoreDuplicates: true -> 忽略冲突（保留旧数据），只插入新数据
+      const { error, count } = await supabase
+        .from('videos')
+        .upsert(videosToUpsert, { 
+            onConflict: 'video_id', 
+            ignoreDuplicates: true 
+        })
+        .select(); // 如果需要返回插入的数据，加上 .select()
 
       if (!error) {
         // 更新频道的“上次侦察时间”
@@ -85,13 +106,18 @@ export default {
           .update({ last_scouted_at: new Date().toISOString() })
           .eq('channel_id', channel.channel_id);
           
-        console.log(`[Scout] Checked ${channel.name}: ${videoId}`);
+        // 找出最新的一条用于返回显示 (给前端弹窗用)
+        const latestVideo = videosToUpsert[0]; 
+
+        console.log(`[Scout] Processed ${channel.name}: ${videosToUpsert.length} items from RSS.`);
         
-        // 🟢 返回成功数据
         return { 
             success: true, 
             message: 'Scan completed', 
-            video: { id: videoId, title: title } 
+            // 返回处理了多少条 RSS 数据
+            rss_count: videosToUpsert.length,
+            // 随便返回第一条作为“最新”示例
+            video: { id: latestVideo.video_id, title: latestVideo.title } 
         };
       } else {
         console.error(`[DB Error] ${error.message}`);
